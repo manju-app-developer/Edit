@@ -1,13 +1,20 @@
 const upload = document.getElementById("upload");
 const canvas = document.getElementById("canvas");
+const maskCanvas = document.getElementById("maskCanvas");
 const ctx = canvas.getContext("2d");
+const maskCtx = maskCanvas.getContext("2d");
 const clearBtn = document.getElementById("clear");
 const eraseBtn = document.getElementById("erase");
 const downloadBtn = document.getElementById("download");
+const preview = document.getElementById("preview");
+const brushTool = document.getElementById("brushTool");
+const rectTool = document.getElementById("rectTool");
 
 let painting = false;
+let tool = "brush";
+let startX, startY;
 
-// Upload and display image
+// Load and display image
 upload.addEventListener("change", function(event) {
     const file = event.target.files[0];
     if (file) {
@@ -16,42 +23,58 @@ upload.addEventListener("change", function(event) {
         img.onload = () => {
             canvas.width = img.width;
             canvas.height = img.height;
+            maskCanvas.width = img.width;
+            maskCanvas.height = img.height;
             ctx.drawImage(img, 0, 0, img.width, img.height);
+            maskCtx.fillStyle = "black";
+            maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
         };
     }
 });
 
-// Drawing mask on image
-canvas.addEventListener("mousedown", () => painting = true);
-canvas.addEventListener("mouseup", () => painting = false);
-canvas.addEventListener("mousemove", draw);
+// Handle drawing mask
+canvas.addEventListener("mousedown", (e) => {
+    painting = true;
+    startX = e.offsetX;
+    startY = e.offsetY;
+});
 
-function draw(event) {
-    if (!painting) return;
-    ctx.fillStyle = "rgba(255, 0, 0, 0.5)"; // Red mask
-    ctx.beginPath();
-    ctx.arc(event.offsetX, event.offsetY, 10, 0, Math.PI * 2);
-    ctx.fill();
-}
+canvas.addEventListener("mouseup", (e) => {
+    painting = false;
+    if (tool === "rect") {
+        let width = e.offsetX - startX;
+        let height = e.offsetY - startY;
+        maskCtx.fillStyle = "white";
+        maskCtx.fillRect(startX, startY, width, height);
+    }
+});
+
+canvas.addEventListener("mousemove", (e) => {
+    if (!painting || tool !== "brush") return;
+    maskCtx.fillStyle = "white";
+    maskCtx.beginPath();
+    maskCtx.arc(e.offsetX, e.offsetY, 10, 0, Math.PI * 2);
+    maskCtx.fill();
+});
+
+// Tool selection
+brushTool.addEventListener("click", () => tool = "brush");
+rectTool.addEventListener("click", () => tool = "rect");
+
+// Clear mask
+clearBtn.addEventListener("click", () => {
+    maskCtx.fillStyle = "black";
+    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+});
 
 // Send image & mask to backend
 eraseBtn.addEventListener("click", async () => {
-    const originalImage = canvas.toDataURL("image/png");
-    const maskCanvas = document.createElement("canvas");
-    maskCanvas.width = canvas.width;
-    maskCanvas.height = canvas.height;
-    const maskCtx = maskCanvas.getContext("2d");
-    maskCtx.fillStyle = "black";
-    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-    maskCtx.globalCompositeOperation = "source-over";
-    maskCtx.fillStyle = "white";
-    maskCtx.drawImage(canvas, 0, 0);  // Copy mask
-
-    const maskImage = maskCanvas.toDataURL("image/png");
+    const image = canvas.toDataURL("image/png");
+    const mask = maskCanvas.toDataURL("image/png");
 
     const formData = new FormData();
-    formData.append("image", dataURLtoFile(originalImage, "image.png"));
-    formData.append("mask", dataURLtoFile(maskImage, "mask.png"));
+    formData.append("image", dataURLtoFile(image, "image.png"));
+    formData.append("mask", dataURLtoFile(mask, "mask.png"));
 
     const response = await fetch("http://127.0.0.1:5000/erase", {
         method: "POST",
@@ -60,15 +83,10 @@ eraseBtn.addEventListener("click", async () => {
 
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.src = url;
-    img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    };
+    preview.innerHTML = `<img src="${url}" alt="Erased Image">`;
 });
 
-// Convert base64 to File object
+// Convert base64 to File
 function dataURLtoFile(dataurl, filename) {
     let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
         bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
@@ -78,15 +96,13 @@ function dataURLtoFile(dataurl, filename) {
     return new File([u8arr], filename, {type: mime});
 }
 
-// Clear the drawn mask
-clearBtn.addEventListener("click", () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-});
-
-// Download the final image
+// Download final image
 downloadBtn.addEventListener("click", () => {
-    const link = document.createElement("a");
-    link.download = "edited-image.png";
-    link.href = canvas.toDataURL();
-    link.click();
+    const img = preview.querySelector("img");
+    if (img) {
+        const link = document.createElement("a");
+        link.download = "smart-erased.png";
+        link.href = img.src;
+        link.click();
+    }
 });
