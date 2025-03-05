@@ -10,9 +10,19 @@
     <div class="container">
         <h1>Smart Image Eraser</h1>
         <input type="file" id="upload" accept="image/*">
-        <canvas id="canvas"></canvas>
-        <button id="clear">Clear Marks</button>
-        <button id="download">Download Image</button>
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+            <canvas id="maskCanvas"></canvas>
+        </div>
+        <div class="tools">
+            <button id="brushTool">Brush</button>
+            <button id="rectTool">Rectangle</button>
+            <button id="clear">Clear Mask</button>
+            <button id="erase">Erase</button>
+            <button id="download">Download</button>
+        </div>
+        <h2>Preview</h2>
+        <div id="preview"></div>
     </div>
     <script src="script.js"></script>
 </body>
